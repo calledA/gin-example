@@ -19,19 +19,16 @@ var (
 	strSlash = []byte("/")
 )
 
-// Param is a single URL parameter, consisting of a key and a value.
+// URL的参数（param），包含一对键值对
 type Param struct {
 	Key   string
 	Value string
 }
 
-// Params is a Param-slice, as returned by the router.
-// The slice is ordered, the first URL parameter is also the first slice value.
-// It is therefore safe to read values by the index.
+// 通过router返回的Param的有序切片，第一对URL的Param处于切片的第一位，因此通过index读取是安全的
 type Params []Param
 
-// Get returns the value of the first Param which key matches the given name and a boolean true.
-// If no matching Param is found, an empty string is returned and a boolean false .
+// 返回第一个匹配到的Param，同时返回true，如果没有匹配到值，则返回空字符串和false
 func (ps Params) Get(name string) (string, bool) {
 	for _, entry := range ps {
 		if entry.Key == name {
@@ -41,22 +38,25 @@ func (ps Params) Get(name string) (string, bool) {
 	return "", false
 }
 
-// ByName returns the value of the first Param which key matches the given name.
-// If no matching Param is found, an empty string is returned.
+// 返回第一个匹配到的Param，如果没有匹配到值，则返回空字符串
 func (ps Params) ByName(name string) (va string) {
 	va, _ = ps.Get(name)
 	return
 }
 
+// 方法树
 type methodTree struct {
 	method string
 	root   *node
 }
 
+// 方法树的切片
 type methodTrees []methodTree
 
+// 返回匹配的method的节点
 func (trees methodTrees) get(method string) *node {
 	for _, tree := range trees {
+		// 匹配tree的节点
 		if tree.method == method {
 			return tree.root
 		}
@@ -64,6 +64,7 @@ func (trees methodTrees) get(method string) *node {
 	return nil
 }
 
+// 返回较小值
 func min(a, b int) int {
 	if a <= b {
 		return a
@@ -71,6 +72,7 @@ func min(a, b int) int {
 	return b
 }
 
+// 返回最大公共前缀
 func longestCommonPrefix(a, b string) int {
 	i := 0
 	max := min(len(a), len(b))
@@ -80,16 +82,19 @@ func longestCommonPrefix(a, b string) int {
 	return i
 }
 
-// addChild will add a child node, keeping wildcardChild at the end
+// 添加一个child node，保持wildcardChild在最后一位
 func (n *node) addChild(child *node) {
 	if n.wildChild && len(n.children) > 0 {
+		// 将wildcardChild拷贝出来放在最后一位
 		wildcardChild := n.children[len(n.children)-1]
 		n.children = append(n.children[:len(n.children)-1], child, wildcardChild)
 	} else {
+		// 直接添加到末尾
 		n.children = append(n.children, child)
 	}
 }
 
+// 对strColon和strStar计数
 func countParams(path string) uint16 {
 	var n uint16
 	s := bytesconv.StringToBytes(path)
@@ -98,6 +103,7 @@ func countParams(path string) uint16 {
 	return n
 }
 
+// 对strSlash计数
 func countSections(path string) uint16 {
 	s := bytesconv.StringToBytes(path)
 	return uint16(bytes.Count(s, strSlash))
@@ -112,6 +118,7 @@ const (
 	catchAll
 )
 
+// TODO
 type node struct {
 	path      string
 	indices   string

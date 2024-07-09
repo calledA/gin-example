@@ -1043,7 +1043,7 @@ func (c *Context) SSEvent(name string, message any) {
 	})
 }
 
-// 发出stream response并返回bool值，判断client是否断开流
+// echo stream response并返回bool值，判断client是否断开流
 func (c *Context) Stream(step func(w io.Writer) bool) bool {
 	w := c.Writer
 	clientGone := w.CloseNotify()
@@ -1105,10 +1105,11 @@ func (c *Context) Negotiate(code int, config Negotiate) {
 	}
 }
 
-// NegotiateFormat returns an acceptable Accept format.
+// 返回一个可以接受的Accept格式
 func (c *Context) NegotiateFormat(offered ...string) string {
 	assert1(len(offered) > 0, "you must provide at least one offer")
 
+	// c.Accepted为空的话，通过Accept header设置
 	if c.Accepted == nil {
 		c.Accepted = parseAccept(c.requestHeader("Accept"))
 	}
@@ -1117,9 +1118,9 @@ func (c *Context) NegotiateFormat(offered ...string) string {
 	}
 	for _, accepted := range c.Accepted {
 		for _, offer := range offered {
-			// According to RFC 2616 and RFC 2396, non-ASCII characters are not allowed in headers,
-			// therefore we can just iterate over the string without casting it into []rune
+			// non-ASCII的字符不能出现在headers，所以可以直接比较字符串而不用转换为[]rune
 			i := 0
+			// c.Accepted和offered逐位进行比较，如果为*，直接返回
 			for ; i < len(accepted) && i < len(offer); i++ {
 				if accepted[i] == '*' || offer[i] == '*' {
 					return offer
@@ -1145,22 +1146,26 @@ func (c *Context) SetAccepted(formats ...string) {
 /***** GOLANG.ORG/X/NET/CONTEXT *****/
 /************************************/
 
-// hasRequestContext returns whether c.Request has Context and fallback.
+// 返回是否有c.Request是否有Context和fallback
 func (c *Context) hasRequestContext() bool {
+	// 判断是否有fallback
 	hasFallback := c.engine != nil && c.engine.ContextWithFallback
+	// 判断是否有Context
 	hasRequestContext := c.Request != nil && c.Request.Context() != nil
+	// hasFallback和hasRequestContext与操作
 	return hasFallback && hasRequestContext
 }
 
-// Deadline returns that there is no deadline (ok==false) when c.Request has no Context.
+// 当c.Request没有Context时，返回context.Deadline()的值
 func (c *Context) Deadline() (deadline time.Time, ok bool) {
 	if !c.hasRequestContext() {
 		return
 	}
+	// 返回context.Deadline
 	return c.Request.Context().Deadline()
 }
 
-// Done returns nil (chan which will wait forever) when c.Request has no Context.
+// 当c.Request没有Context时，返回context.Done()的值
 func (c *Context) Done() <-chan struct{} {
 	if !c.hasRequestContext() {
 		return nil
@@ -1168,7 +1173,7 @@ func (c *Context) Done() <-chan struct{} {
 	return c.Request.Context().Done()
 }
 
-// Err returns nil when c.Request has no Context.
+// 当c.Request没有Context时，返回context.Err()的值
 func (c *Context) Err() error {
 	if !c.hasRequestContext() {
 		return nil
@@ -1176,9 +1181,7 @@ func (c *Context) Err() error {
 	return c.Request.Context().Err()
 }
 
-// Value returns the value associated with this context for key, or nil
-// if no value is associated with key. Successive calls to Value with
-// the same key returns the same result.
+// 返回与此上下文关联的Value，使用相同键连续调用 Value 将返回相同结果。
 func (c *Context) Value(key any) any {
 	if key == 0 {
 		return c.Request
@@ -1191,8 +1194,10 @@ func (c *Context) Value(key any) any {
 			return val
 		}
 	}
+	// 如果没有与键关联的值，则返回nil
 	if !c.hasRequestContext() {
 		return nil
 	}
+	// 返回context.Value()的值
 	return c.Request.Context().Value(key)
 }
