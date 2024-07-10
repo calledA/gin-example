@@ -21,7 +21,8 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
-const defaultMultipartMemory = 32 << 20 // 32 MB
+// 默认MultipartForm大小（32 MB）
+const defaultMultipartMemory = 32 << 20
 
 var (
 	default404Body = []byte("404 page not found")
@@ -44,13 +45,13 @@ var defaultTrustedCIDRs = []*net.IPNet{
 var regSafePrefix = regexp.MustCompile("[^a-zA-Z0-9/-]+")
 var regRemoveRepeatedChar = regexp.MustCompile("/{2,}")
 
-// HandlerFunc defines the handler used by gin middleware as return value.
+// gin middleware返回的函数声明
 type HandlerFunc func(*Context)
 
-// HandlersChain defines a HandlerFunc slice.
+// HandlerFunc的切片
 type HandlersChain []HandlerFunc
 
-// Last returns the last handler in the chain. i.e. the last handler is the main one.
+// 返回HandlersChain的最后一个handler，最后一个handler是最主要的
 func (c HandlersChain) Last() HandlerFunc {
 	if length := len(c); length > 0 {
 		return c[length-1]
