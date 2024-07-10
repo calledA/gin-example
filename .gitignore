@@ -22,4 +22,4 @@ go.work
 go.work.sum
 
 # IDE file
-#.idea
+.idea

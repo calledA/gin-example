@@ -9,7 +9,7 @@ import (
 	"net/http"
 )
 
-// 用于HTML模板渲染的左右分割符
+// 用于HTML模板渲染的左右分隔符
 type Delims struct {
 	// 左分割符（ 默认{{ ）
 	Left string

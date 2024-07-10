@@ -37,13 +37,13 @@ const (
 	MIMETOML              = binding.MIMETOML
 )
 
-// BodyBytesKey indicates a default body bytes key.
+// 默认的body byte key
 const BodyBytesKey = "_gin-gonic/gin/bodybyteskey"
 
-// ContextKey is the key that a Context returns itself for.
+// Context返回的自己的key
 const ContextKey = "_gin-gonic/gin/contextkey"
 
-// abortIndex represents a typical value used in abort functions.
+// 默认的abort方法的index
 const abortIndex int8 = math.MaxInt8 >> 1
 
 // Context是gin中最重要的部分，可以通过Context在middleware中传递变量，请求链路控制、校验JSON参数以及response的JSON render
@@ -61,27 +61,25 @@ type Context struct {
 	params       *Params
 	skippedNodes *[]skippedNode
 
-	// This mutex protects Keys map.
+	// 读写锁，进行并发控制
 	mu sync.RWMutex
 
-	// Keys is a key/value pair exclusively for the context of each request.
+	// 每个请求的上下文
 	Keys map[string]any
 
-	// Errors is a list of errors attached to all the handlers/middlewares who used this context.
+	// 使用Context的handler或middleware出现错误的列表
 	Errors errorMsgs
 
-	// Accepted defines a list of manually accepted formats for content negotiation.
+	// 内容协商所手动接受的格式列表
 	Accepted []string
 
-	// queryCache caches the query result from c.Request.URL.Query().
+	// 缓存c.Request.URL.Query()的query结果
 	queryCache url.Values
 
-	// formCache caches c.Request.PostForm, which contains the parsed form data from POST, PATCH,
-	// or PUT body parameters.
+	// 缓存POST、PATCH或PUT请求中c.Request.PostForm的body参数数据。
 	formCache url.Values
 
-	// SameSite allows a server to define a cookie attribute making it impossible for
-	// the browser to send this cookie along with cross-site requests.
+	// 允许服务器定义cookie属性，使得浏览器无法将此 cookie与跨站请求一起发送
 	sameSite http.SameSite
 }
 

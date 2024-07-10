@@ -59,7 +59,7 @@ func (c HandlersChain) Last() HandlerFunc {
 	return nil
 }
 
-// RouteInfo represents a request route's specification which contains method and path and its handler.
+// 请求的路由信息，包含http method、path和对应的handler
 type RouteInfo struct {
 	Method      string
 	Path        string
@@ -67,22 +67,20 @@ type RouteInfo struct {
 	HandlerFunc HandlerFunc
 }
 
-// RoutesInfo defines a RouteInfo slice.
+// RouteInfo的切片
 type RoutesInfo []RouteInfo
 
-// Trusted platforms
+// 信任的platform
 const (
-	// PlatformGoogleAppEngine when running on Google App Engine. Trust X-Appengine-Remote-Addr
-	// for determining the client's IP
+	// 在Google App Engine上运行，通过信任的X-Appengine-Remote-Addr来确定客户端IP
 	PlatformGoogleAppEngine = "X-Appengine-Remote-Addr"
-	// PlatformCloudflare when using Cloudflare's CDN. Trust CF-Connecting-IP for determining
-	// the client's IP
+	// 在Cloudflare's CDN上运行，通过信任的CF-Connecting-IP来确定客户端IP
 	PlatformCloudflare = "CF-Connecting-IP"
 )
 
-// Engine is the framework's instance, it contains the muxer, middleware and configuration settings.
-// Create an instance of Engine, by using New() or Default()
+// Engine是gin框架的实例，包含muxer、middleware以及其他配置，通过New()或Default()方法创建
 type Engine struct {
+	// 路由组
 	RouterGroup
 
 	// RedirectTrailingSlash enables automatic redirection if the current route can't be matched but a
@@ -149,7 +147,7 @@ type Engine struct {
 	// method call.
 	MaxMultipartMemory int64
 
-	// UseH2C enable h2c support.
+	// 是否启用h2c支持，H2C：不使用TLS加密的http2协议
 	UseH2C bool
 
 	// ContextWithFallback enable fallback Context.Deadline(), Context.Done(), Context.Err() and Context.Value() when Context.Request.Context() is not nil.
@@ -163,27 +161,22 @@ type Engine struct {
 	allNoMethod      HandlersChain
 	noRoute          HandlersChain
 	noMethod         HandlersChain
-	pool             sync.Pool
-	trees            methodTrees
-	maxParams        uint16
-	maxSections      uint16
-	trustedProxies   []string
-	trustedCIDRs     []*net.IPNet
+	// 并发安全的对象池
+	pool           sync.Pool
+	trees          methodTrees
+	maxParams      uint16
+	maxSections    uint16
+	trustedProxies []string
+	trustedCIDRs   []*net.IPNet
 }
 
 // 接口实现校验
 var _ IRouter = (*Engine)(nil)
 
-// New returns a new blank Engine instance without any middleware attached.
-// By default, the configuration is:
-// - RedirectTrailingSlash:  true
-// - RedirectFixedPath:      false
-// - HandleMethodNotAllowed: false
-// - ForwardedByClientIP:    true
-// - UseRawPath:             false
-// - UnescapePathValues:     true
+// 创建没有middleware的Engine实例，以及设置一些配置的默认值
 func New() *Engine {
 	debugPrintWARNINGNew()
+	// 创建Engine实例，设置配置默认值
 	engine := &Engine{
 		RouterGroup: RouterGroup{
 			Handlers: nil,
@@ -207,55 +200,64 @@ func New() *Engine {
 		trustedProxies:         []string{"0.0.0.0/0", "::/0"},
 		trustedCIDRs:           defaultTrustedCIDRs,
 	}
+	// TODO
 	engine.RouterGroup.engine = engine
+	// 对象池中返回并发安全的Context
 	engine.pool.New = func() any {
 		return engine.allocateContext(engine.maxParams)
 	}
+	// 返回创建的的Engine实例
 	return engine
 }
 
-// Default returns an Engine instance with the Logger and Recovery middleware already attached.
+// 返回Engine实例，Default包含Logger和Recovery middleware
 func Default() *Engine {
 	debugPrintWARNINGDefault()
+	// 通过New()创建Engine实例
 	engine := New()
+	// 添加Logger和Recovery middleware
 	engine.Use(Logger(), Recovery())
 	return engine
 }
 
 func (engine *Engine) Handler() http.Handler {
+	// 不启用H2C，直接返回engine
 	if !engine.UseH2C {
 		return engine
 	}
 
+	// 使用h2c包装engine
 	h2s := &http2.Server{}
 	return h2c.NewHandler(engine, h2s)
 }
 
+// 分配Context
 func (engine *Engine) allocateContext(maxParams uint16) *Context {
 	v := make(Params, 0, maxParams)
 	skippedNodes := make([]skippedNode, 0, engine.maxSections)
 	return &Context{engine: engine, params: &v, skippedNodes: &skippedNodes}
 }
 
-// Delims sets template left and right delims and returns an Engine instance.
+// 设置template左右分隔符并返回Engine实例
 func (engine *Engine) Delims(left, right string) *Engine {
 	engine.delims = render.Delims{Left: left, Right: right}
 	return engine
 }
 
-// SecureJsonPrefix sets the secureJSONPrefix used in Context.SecureJSON.
+// 设置secureJSON的前缀，在Context.SecureJSON中使用
 func (engine *Engine) SecureJsonPrefix(prefix string) *Engine {
 	engine.secureJSONPrefix = prefix
 	return engine
 }
 
-// LoadHTMLGlob loads HTML files identified by glob pattern
-// and associates the result with HTML renderer.
+// 加载由glob模式标识的HTML文件并将结果与HTML Render关联
 func (engine *Engine) LoadHTMLGlob(pattern string) {
+	// 生成template
 	left := engine.delims.Left
 	right := engine.delims.Right
 	templ := template.Must(template.New("").Delims(left, right).Funcs(engine.FuncMap).ParseGlob(pattern))
 
+	// debug模式
 	if IsDebugging() {
 		debugPrintLoadTemplate(templ)
 		engine.HTMLRender = render.HTMLDebug{Glob: pattern, FuncMap: engine.FuncMap, Delims: engine.delims}
@@ -265,9 +267,9 @@ func (engine *Engine) LoadHTMLGlob(pattern string) {
 	engine.SetHTMLTemplate(templ)
 }
 
-// LoadHTMLFiles loads a slice of HTML files
-// and associates the result with HTML renderer.
+// 加载HTML文件切片并将结果与HTML Render关联
 func (engine *Engine) LoadHTMLFiles(files ...string) {
+	// debug模式
 	if IsDebugging() {
 		engine.HTMLRender = render.HTMLDebug{Files: files, FuncMap: engine.FuncMap, Delims: engine.delims}
 		return
@@ -277,7 +279,7 @@ func (engine *Engine) LoadHTMLFiles(files ...string) {
 	engine.SetHTMLTemplate(templ)
 }
 
-// SetHTMLTemplate associate a template with HTML renderer.
+// 设置和HTML Render关联的template
 func (engine *Engine) SetHTMLTemplate(templ *template.Template) {
 	if len(engine.trees) > 0 {
 		debugPrintWARNINGSetHTMLTemplate()
@@ -286,26 +288,24 @@ func (engine *Engine) SetHTMLTemplate(templ *template.Template) {
 	engine.HTMLRender = render.HTMLProduction{Template: templ.Funcs(engine.FuncMap)}
 }
 
-// SetFuncMap sets the FuncMap used for template.FuncMap.
+// 通过template.FuncMap设置engine.FuncMap
 func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
 	engine.FuncMap = funcMap
 }
 
-// NoRoute adds handlers for NoRoute. It returns a 404 code by default.
+// 为 NoRoute 添加处理程序。默认返回404
 func (engine *Engine) NoRoute(handlers ...HandlerFunc) {
 	engine.noRoute = handlers
 	engine.rebuild404Handlers()
 }
 
-// NoMethod sets the handlers called when Engine.HandleMethodNotAllowed = true.
+// 设置handler，当Engine.HandleMethodNotAllowed = true时被调用
 func (engine *Engine) NoMethod(handlers ...HandlerFunc) {
 	engine.noMethod = handlers
 	engine.rebuild405Handlers()
 }
 
-// Use attaches a global middleware to the router. i.e. the middleware attached through Use() will be
-// included in the handlers chain for every single request. Even 404, 405, static files...
-// For example, this is the right place for a logger or error management middleware.
+// 使用Use()，向请求添加需要处理的handler chain，可以是单个router、routergroup、404、405等
 func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
 	engine.RouterGroup.Use(middleware...)
 	engine.rebuild404Handlers()
@@ -313,30 +313,37 @@ func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
 	return engine
 }
 
+// 404 handler
 func (engine *Engine) rebuild404Handlers() {
 	engine.allNoRoute = engine.combineHandlers(engine.noRoute)
 }
 
+// 405 handler
 func (engine *Engine) rebuild405Handlers() {
 	engine.allNoMethod = engine.combineHandlers(engine.noMethod)
 }
 
+// 添加router
 func (engine *Engine) addRoute(method, path string, handlers HandlersChain) {
+	// 对path、method、handler进行断言
 	assert1(path[0] == '/', "path must begin with '/'")
 	assert1(method != "", "HTTP method can not be empty")
 	assert1(len(handlers) > 0, "there must be at least one handler")
 
+	// debug mode打印信息
 	debugPrintRoute(method, path, handlers)
 
+	// 找到root node，如果不存在则创建root node
 	root := engine.trees.get(method)
 	if root == nil {
 		root = new(node)
 		root.fullPath = "/"
 		engine.trees = append(engine.trees, methodTree{method: method, root: root})
 	}
+	// 向root添加path和handlers
 	root.addRoute(path, handlers)
 
-	// Update maxParams
+	// 更新maxParams
 	if paramsCount := countParams(path); paramsCount > engine.maxParams {
 		engine.maxParams = paramsCount
 	}
@@ -346,8 +353,7 @@ func (engine *Engine) addRoute(method, path string, handlers HandlersChain) {
 	}
 }
 
-// Routes returns a slice of registered routes, including some useful information, such as:
-// the http method, path and the handler name.
+// 返回注册router的切片，包含http method、path、handler name等信息
 func (engine *Engine) Routes() (routes RoutesInfo) {
 	for _, tree := range engine.trees {
 		routes = iterate("", tree.method, routes, tree.root)
@@ -355,6 +361,7 @@ func (engine *Engine) Routes() (routes RoutesInfo) {
 	return routes
 }
 
+// 遍历node，返回RoutesInfo
 func iterate(path, method string, routes RoutesInfo, root *node) RoutesInfo {
 	path += root.path
 	if len(root.handlers) > 0 {
@@ -372,9 +379,7 @@ func iterate(path, method string, routes RoutesInfo, root *node) RoutesInfo {
 	return routes
 }
 
-// Run attaches the router to a http.Server and starts listening and serving HTTP requests.
-// It is a shortcut for http.ListenAndServe(addr, router)
-// Note: this method will block the calling goroutine indefinitely unless an error happens.
+// 通过http.Server进行http服务
 func (engine *Engine) Run(addr ...string) (err error) {
 	defer func() { debugPrintError(err) }()
 
@@ -383,25 +388,32 @@ func (engine *Engine) Run(addr ...string) (err error) {
 			"Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.")
 	}
 
+	// 解析IP和端口号
 	address := resolveAddress(addr)
 	debugPrint("Listening and serving HTTP on %s\n", address)
+	// 启动http服务
 	err = http.ListenAndServe(address, engine.Handler())
 	return
 }
 
+// 对trustedProxies进行预处理，包括添加子网掩码和转换类型等
 func (engine *Engine) prepareTrustedCIDRs() ([]*net.IPNet, error) {
+	// 判断是否有trustedProxies
 	if engine.trustedProxies == nil {
 		return nil, nil
 	}
 
 	cidr := make([]*net.IPNet, 0, len(engine.trustedProxies))
 	for _, trustedProxy := range engine.trustedProxies {
+		// trustedProxy不包含子网掩码的情况
 		if !strings.Contains(trustedProxy, "/") {
+			// 转换trustedProxy为net.IP类型
 			ip := parseIP(trustedProxy)
 			if ip == nil {
 				return cidr, &net.ParseError{Type: "IP address", Text: trustedProxy}
 			}
 
+			// 判断ip是ipv4，还是ipv6，添加对应的子网掩码
 			switch len(ip) {
 			case net.IPv4len:
 				trustedProxy += "/32"
@@ -409,24 +421,22 @@ func (engine *Engine) prepareTrustedCIDRs() ([]*net.IPNet, error) {
 				trustedProxy += "/128"
 			}
 		}
+		// trustedProxy有子网掩码，直接转换为CIDR地址
 		_, cidrNet, err := net.ParseCIDR(trustedProxy)
 		if err != nil {
 			return cidr, err
 		}
+		// 添加到cidr列表中
 		cidr = append(cidr, cidrNet)
 	}
 	return cidr, nil
 }
 
-// SetTrustedProxies set a list of network origins (IPv4 addresses,
-// IPv4 CIDRs, IPv6 addresses or IPv6 CIDRs) from which to trust
-// request's headers that contain alternative client IP when
-// `(*gin.Engine).ForwardedByClientIP` is `true`. `TrustedProxies`
-// feature is enabled by default, and it also trusts all proxies
-// by default. If you want to disable this feature, use
-// Engine.SetTrustedProxies(nil), then Context.ClientIP() will
-// return the remote address directly.
+// (*gin.Engine).ForwardedByClientIP为true时，设置一个网络列表（包含ipv4、ipv6等）
+// 功能默认启用，并且默认情况下信任所有代理
+// 如果要禁用此功能，使用Engine.SetTrustedProxies(nil)，Context.ClientIP()将直接返回远程地址
 func (engine *Engine) SetTrustedProxies(trustedProxies []string) error {
+	// 设置trustedProxies
 	engine.trustedProxies = trustedProxies
 	return engine.parseTrustedProxies()
 }
@@ -436,14 +446,16 @@ func (engine *Engine) isUnsafeTrustedProxies() bool {
 	return engine.isTrustedProxy(net.ParseIP("0.0.0.0")) || engine.isTrustedProxy(net.ParseIP("::"))
 }
 
-// parseTrustedProxies parse Engine.trustedProxies to Engine.trustedCIDRs
+// 将Engine.trustedProxies解析成trustedCIDRs
 func (engine *Engine) parseTrustedProxies() error {
+	// 对trustedCIDRs进行预处理
 	trustedCIDRs, err := engine.prepareTrustedCIDRs()
+	// 设置trustedCIDRs
 	engine.trustedCIDRs = trustedCIDRs
 	return err
 }
 
-// isTrustedProxy will check whether the IP address is included in the trusted list according to Engine.trustedCIDRs
+// 检查ip是否包含在Engine.trustedCIDRs中
 func (engine *Engine) isTrustedProxy(ip net.IP) bool {
 	if engine.trustedCIDRs == nil {
 		return false
@@ -456,21 +468,23 @@ func (engine *Engine) isTrustedProxy(ip net.IP) bool {
 	return false
 }
 
-// validateHeader will parse X-Forwarded-For header and return the trusted client IP address
+// 解析X-Forwarded-For header，同时返回可信任的client ip address
 func (engine *Engine) validateHeader(header string) (clientIP string, valid bool) {
 	if header == "" {
 		return "", false
 	}
+	// 分割header
 	items := strings.Split(header, ",")
 	for i := len(items) - 1; i >= 0; i-- {
+		// 去除前后空格
 		ipStr := strings.TrimSpace(items[i])
+		// 解析ip
 		ip := net.ParseIP(ipStr)
 		if ip == nil {
 			break
 		}
 
-		// X-Forwarded-For is appended by proxy
-		// Check IPs in reverse order and stop when find untrusted proxy
+		// 相反的顺序检查ip，在发现不受信任的代理时停止
 		if (i == 0) || (!engine.isTrustedProxy(ip)) {
 			return ipStr, true
 		}
@@ -478,23 +492,22 @@ func (engine *Engine) validateHeader(header string) (clientIP string, valid bool
 	return "", false
 }
 
-// parseIP parse a string representation of an IP and returns a net.IP with the
-// minimum byte representation or nil if input is invalid.
+// 解析string类型的IP为最小byte表示的net.IP，如果输入无效则返回nil
 func parseIP(ip string) net.IP {
+	// 转换解析ip
 	parsedIP := net.ParseIP(ip)
 
+	// 转换ip为ipv4类型
 	if ipv4 := parsedIP.To4(); ipv4 != nil {
-		// return ip in a 4-byte representation
+		// 通过4byte表示ip地址
 		return ipv4
 	}
 
-	// return ip in a 16-byte representation or nil
+	// 转换ipv4失败的话，则为ipv6，通过16byte表示ip地址
 	return parsedIP
 }
 
-// RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
-// It is a shortcut for http.ListenAndServeTLS(addr, certFile, keyFile, router)
-// Note: this method will block the calling goroutine indefinitely unless an error happens.
+// 通过http.Server进行https服务
 func (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
 	debugPrint("Listening and serving HTTPS on %s\n", addr)
 	defer func() { debugPrintError(err) }()
@@ -504,13 +517,12 @@ func (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
 			"Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.")
 	}
 
+	// 启动https服务
 	err = http.ListenAndServeTLS(addr, certFile, keyFile, engine.Handler())
 	return
 }
 
-// RunUnix attaches the router to a http.Server and starts listening and serving HTTP requests
-// through the specified unix socket (i.e. a file).
-// Note: this method will block the calling goroutine indefinitely unless an error happens.
+// 通过http.Server进行http服务（unix环境的套接字，即file）
 func (engine *Engine) RunUnix(file string) (err error) {
 	debugPrint("Listening and serving HTTP on unix:/%s", file)
 	defer func() { debugPrintError(err) }()
@@ -520,6 +532,7 @@ func (engine *Engine) RunUnix(file string) (err error) {
 			"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.")
 	}
 
+	// 监听unix套接字
 	listener, err := net.Listen("unix", file)
 	if err != nil {
 		return
@@ -527,13 +540,12 @@ func (engine *Engine) RunUnix(file string) (err error) {
 	defer listener.Close()
 	defer os.Remove(file)
 
+	// 启动http服务
 	err = http.Serve(listener, engine.Handler())
 	return
 }
 
-// RunFd attaches the router to a http.Server and starts listening and serving HTTP requests
-// through the specified file descriptor.
-// Note: this method will block the calling goroutine indefinitely unless an error happens.
+// 使用特定的file descriptor启动server
 func (engine *Engine) RunFd(fd int) (err error) {
 	debugPrint("Listening and serving HTTP on fd@%d", fd)
 	defer func() { debugPrintError(err) }()
@@ -543,18 +555,20 @@ func (engine *Engine) RunFd(fd int) (err error) {
 			"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.")
 	}
 
+	// 监听文件描述符
 	f := os.NewFile(uintptr(fd), fmt.Sprintf("fd@%d", fd))
 	listener, err := net.FileListener(f)
 	if err != nil {
 		return
 	}
 	defer listener.Close()
+
+	// 启动Engine的Listener
 	err = engine.RunListener(listener)
 	return
 }
 
-// RunListener attaches the router to a http.Server and starts listening and serving HTTP requests
-// through the specified net.Listener
+// 通过http.Server特定的net.Listener进行http服务
 func (engine *Engine) RunListener(listener net.Listener) (err error) {
 	debugPrint("Listening and serving HTTP on listener what's bind with address@%s", listener.Addr())
 	defer func() { debugPrintError(err) }()
@@ -564,25 +578,27 @@ func (engine *Engine) RunListener(listener net.Listener) (err error) {
 			"Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.")
 	}
 
+	// 启动http服务
 	err = http.Serve(listener, engine.Handler())
 	return
 }
 
-// ServeHTTP conforms to the http.Handler interface.
+// 符合http.Handler的接口
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// 对象池获取Context并进行资源重置
 	c := engine.pool.Get().(*Context)
 	c.writermem.reset(w)
 	c.Request = req
 	c.reset()
 
+	// 接收http request
 	engine.handleHTTPRequest(c)
 
+	// 使用完之后返回Context
 	engine.pool.Put(c)
 }
 
-// HandleContext re-enters a context that has been rewritten.
-// This can be done by setting c.Request.URL.Path to your new target.
-// Disclaimer: You can loop yourself to deal with this, use wisely.
+// 通过重新设置c.Request.URL.Path来进入被重写的Context
 func (engine *Engine) HandleContext(c *Context) {
 	oldIndexValue := c.index
 	c.reset()
@@ -591,6 +607,7 @@ func (engine *Engine) HandleContext(c *Context) {
 	c.index = oldIndexValue
 }
 
+// 处理http请求
 func (engine *Engine) handleHTTPRequest(c *Context) {
 	httpMethod := c.Request.Method
 	rPath := c.Request.URL.Path
@@ -604,14 +621,14 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 		rPath = cleanPath(rPath)
 	}
 
-	// Find root of the tree for the given HTTP method
+	// 通过http method找到对应的handler
 	t := engine.trees
 	for i, tl := 0, len(t); i < tl; i++ {
 		if t[i].method != httpMethod {
 			continue
 		}
 		root := t[i].root
-		// Find route in tree
+		// 找到对应的router
 		value := root.getValue(rPath, c.params, c.skippedNodes, unescape)
 		if value.params != nil {
 			c.Params = *value.params
@@ -635,6 +652,7 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 		break
 	}
 
+	// http method不被允许,返回405
 	if engine.HandleMethodNotAllowed {
 		for _, tree := range engine.trees {
 			if tree.method == httpMethod {
@@ -647,12 +665,14 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 			}
 		}
 	}
+	// 请求路径没找到，返回404
 	c.handlers = engine.allNoRoute
 	serveError(c, http.StatusNotFound, default404Body)
 }
 
 var mimePlain = []string{MIMEPlain}
 
+// 服务错误处理
 func serveError(c *Context, code int, defaultMessage []byte) {
 	c.writermem.status = code
 	c.Next()
@@ -670,6 +690,7 @@ func serveError(c *Context, code int, defaultMessage []byte) {
 	c.writermem.WriteHeaderNow()
 }
 
+// TODO:重定向请求
 func redirectTrailingSlash(c *Context) {
 	req := c.Request
 	p := req.URL.Path
@@ -686,6 +707,7 @@ func redirectTrailingSlash(c *Context) {
 	redirectRequest(c)
 }
 
+// 重定向到指定的地址
 func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
 	req := c.Request
 	rPath := req.URL.Path
@@ -698,6 +720,7 @@ func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
 	return false
 }
 
+// 重定向请求
 func redirectRequest(c *Context) {
 	req := c.Request
 	rPath := req.URL.Path
